@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>子规入梧桐 | 个人JAVA技术博客网站</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="description" content="Description">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <link rel="stylesheet" href="//fastly.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+</head>
+<body>
+  <div id="app">加载中...</div>
+  <script>
+    window.$docsify = {
+      name: '子规入梧桐',
+      repo: 'https://github.com/z1gui',
+      coverpage: true,
+      loadSidebar: true,
+      //autoHeader: true,
+      loadNavbar: true,
+      mergeNavbar: true,
+      //logo: '/_media/icon1.png',
+      maxLevel: 4,
+      subMaxLevel: 2,
+      auto2top: true,
+      search: {
+        paths: 'auto',
+        placeholder: '🔍 搜索 ',
+        noData: '😞 找不到结果! ',
+        depth: 6
+      },
+      pagination: {
+        previousText: '上一篇',
+        nextText: '下一篇',
+        crossChapter: true
+      },
+      count:{
+        countable:true,
+        fontsize:'0.9em',
+        color:'rgb(90,90,90)',
+        language:'chinese'
+      },
+      scrollToTop: {
+        auto: true,
+        text: 'TOP',
+        right: 15,
+        bottom: 15,
+        offset: 500
+
+    },
+      plugins: [
+        function(hook) {
+          var footer = [
+          '<footer style="text-align: center">',
+            '<p>',
+            'Copyright © 2022. <span><a href="https://github.com/z1gui" style="font-size:80%;" target="_blank">子规入梧桐</a></span> , All rights reserved.',
+            '</p>',
+          '</footer>'
+          ].join('');
+
+        hook.afterEach(function(html) {
+          return html + footer;
+        });
+       } 
+      ]
+     
+    }
+    //离线模式
+    if (typeof navigator.serviceWorker !== 'undefined') {
+      navigator.serviceWorker.register('/assets/js/pwa.js')
+    }
+  
+  </script>
+  <!-- Docsify v4 -->
+  <script src="/assets/js/docsify.min.js"></script>
+  <!--search-->
+  <script src="https://fastly.jsdelivr.net/npm/docsify@4/lib/plugins/search.js"></script>
+  <!--上一篇、下一篇-->
+  <script src="/assets/js/docsify-pagination.min.js"></script>
+  <!--访问人数统计-->
+  <script src='//fastly.jsdelivr.net/gh/xaoxuu/cdn-busuanzi@2.3/js/busuanzi.pure.mini.js'></script>
+  <!--添加表情-->
+  <script src="//fastly.jsdelivr.net/npm/docsify/lib/plugins/emoji.min.js"></script>
+  <!--图片缩放-->
+  <script src="//fastly.jsdelivr.net/npm/docsify/lib/plugins/zoom-image.min.js"></script>
+  <!--字数统计-->
+  <script src="//fastly.jsdelivr.net/docsify-count/dist/countable.js"></script>
+  <!--支持代码复制按钮-->
+  <script src="//fastly.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <!--代码高亮-->
+  <script src="//fastly.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="//fastly.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
+  <!--提示-->
+  <script src="https://fastly.jsdelivr.net/docsify-plugin-flexible-alerts"></script>
+  <!--TOP-->
+  <script src="//fastly.jsdelivr.net/docsify-scroll-to-top/dist/docsify-scroll-to-top.min.js"></script>
+</body>
+</html>
