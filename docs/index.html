@@ -7,6 +7,7 @@
   <meta name="description" content="Description">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
   <link rel="stylesheet" href="//fastly.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <link rel="stylesheet" href="./assets/css/prism.css" />
 </head>
 <body>
   <div id="app">加载中...</div>
@@ -23,6 +24,8 @@
       maxLevel: 4,
       subMaxLevel: 2,
       auto2top: true,
+
+
       search: {
         paths: 'auto',
         placeholder: '🔍 搜索 ',
@@ -42,9 +45,9 @@
       },
       scrollToTop: {
         auto: true,
-        text: 'TOP',
-        right: 15,
-        bottom: 15,
+        text: '⊼',
+        right: 30,
+        bottom: 80,
         offset: 500
 
     },
@@ -88,7 +91,8 @@
   <!--支持代码复制按钮-->
   <script src="./assets/js/docsify-copy-code.min.js"></script>
   <!--代码高亮-->
-  <script src="./assets/js/prism-bash.min.js"></script>
+  <script src="./assets/js/prism-java.min.js"></script>
+
   <!--提示-->
   <script src="./assets/js/docsify-plugin-flexible-alerts.min.js"></script>
   <!--TOP-->
