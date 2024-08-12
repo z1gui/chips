@@ -8,32 +8,34 @@
 | 编程难度 |  简单  |     复杂      |  复杂   |
 | 可靠性  |  差   |      好      |   好   |
 | 吞吐量  |  低   |      高      |   高   |
-# 重要概念
-`阻塞 IO` 和`非阻塞 IO`
+# 阅前须知
 
-这两个概念是`程序级别`的。主要描述是程序请求操作系统 IO 操作之后，如果 IO 资源没有准备好，那么程序如何处理问题：前者等待，后者继续执行（并且使用线程一直轮询，知道有 IO 资源准备好）
+`阻塞 IO` 和 `非阻塞 IO`
 
-`同步 IO `和`非同步 IO`
+这两个概念是 `程序级别` 的。主要描述是程序请求操作系统 IO 操作之后，如果 IO 资源没有准备好，那么程序如何处理问题：前者等待，后者继续执行（并且使用线程一直轮询，直到有 IO 资源准备好）
+
+`同步 IO ` 和 `非同步IO`
 
 这两个概念是`操作系统级别`的。主要描述的是操作系统在收到程序请求 IO 操作后，如果 IO 资源没有准备好，该如何相应程序的问题：前者不响应，后者返回一个标记，当 IO 资源准备好之后，在用事件机制返回给程序。
 
 # 一、BIO（Blocking I/O）
-同步并阻塞（传统阻塞性），应用程序中进程在发起 IO 调用后至内核执行 IO 操作返回结果之前，若发起系统调用的线程一直处于等待状态，则此次 IO 操作为阻塞 IO。阻塞 IO 简称 BIO，Blocking IO。
+
+## 基本概念
+
+Java BIO：同步并阻塞（传统阻塞性），应用程序中进程在发起 IO 调用后至内核执行 IO 操作返回结果之前，若发起系统调用的线程一直处于等待状态，则此次 IO 操作为阻塞 IO。阻塞 IO 简称 BIO，Blocking IO。
 
 以前大多数网络通信方式都是阻塞模式，即：
-
 - 客户端向服务器端发送请求后，客户端会一直等待（不会再做其他事情），直到服务器端返回结果或者网络出现问题。
 - 服务端同样的，当在处理某个客户端 A 发来的请求是，另一个客户端 B 发来的请求会等待，直到服务器端的这个处理线程完成上个处理。
 
-![[acea8af4268c8d552741ccebcb2d34ec_MD5.png]](img/acea8af4268c8d552741ccebcb2d34ec_MD5.png)
-## 1. BIO 编程流程
+ ![[]](img/acea8af4268c8d552741ccebcb2d34ec_MD5.png )
+
+## 使用实例
 
 1. 服务器启动一个 ServerSocket。
 2. 客户端启动 Socket 对服务器进行通信，默认情况下服务器端需要对每个客户建立一个线程与之通讯。
-3. 客户端发出请求后，先咨询服务器是否有线程响应，如果没有则会等待，或者被拒绝。
-4. 如果有响应，客户端线程会等待请求结束后，再继续执行。
-
-具体可以看一下代码：
+2. 客户端发出请求后，先咨询服务器是否有线程响应，如果没有则会等待，或者被拒绝。
+3. 如果有响应，客户端线程会等待请求结束后，再继续执行。
 
 ```java
 package com.atguigu.bio;
@@ -69,7 +71,7 @@ public class BIOServer {
                     handler(socket);
                 }
             });
-        }
+        } 
     }
     
     //编写一个handler方法，和客户端通讯
@@ -104,84 +106,94 @@ public class BIOServer {
 }
 ```
 
-## 2. 问题分析
+## 问题分析
+
 传统的 IO 模型，其主要是一个 Server 对接 N 个客户端，在客户端连接之后，为每个客户端分配一个子线程。如图所示：
 
-![[0fb77c535fcbf8f4264b6eff292fd210_MD5.png|1025]](img/0fb77c535fcbf8f4264b6eff292fd210_MD5.png)
+ ![[]](img/0fb77c535fcbf8f4264b6eff292fd210_MD5.png)
 
 从图中可以看出，传统 IO 的特点在于：
+
 - 每个客户端连接到达时，服务端会分配一个线程给该客户端，该线程处理包括读取数据，解码，业务计算，编码，以及发送数据整个过程
 - 同一时刻，服务端的吞吐量与服务器所提供的线程数量呈线性关系的。
 
 如果并发量不大，运行没有问题，但是如果海量并发时候，就会出现问题：
+
 1. 每次请求都要创建独立的线程，与对应的客户端进行数据的Read，业务处理，数据Write、
 2. 当并发数较大时，需要创建大量线程处理连接，资源占用较大。
 3. 连接建立后，如果当前线程展示没有数据可读，则线程就阻塞在Read操作上，造成线程资源浪费。
 
-## 3. 多线程方式 - 伪异步方式
+## 改进：多线程方式 - 伪异步方式
+
 上述说的情况只是服务器只有一个线程的情况，那么如果引入多线程是不是可以解决这个问题：
+
 - 当服务器收到客户端 X 的请求后，（读取到所有的请求数据后）将这个请求送入到一个独立线程进行处理，然后主线程继续接收客户端 Y 的请求。
 - 客户端侧，也可以用一个子线程和服务器端进行通信。这样客户端主线程的其他工作不受影响，当服务器有响应信息时候再有这个子线程通过 `监听模式/观察模式`（等其他设计模式）通知主线程。
 
-![[ed84ace61748c9dbdaf3f9718f21ff21_MD5.png]](img/ed84ace61748c9dbdaf3f9718f21ff21_MD5.png)
+ ![[]](img/ed84ace61748c9dbdaf3f9718f21ff21_MD5.png )
 
 但是多线程解决这个问题有局限性：
 
 - 操作系统通知accept() 的方式还是单个，即：服务器收到数据报文之后的“业务处理过程”可以多线程，但是报文的接收还是需要一个个来
 - 在操作系统中，线程是有限的。线程越多，CPU 切换所需时间也越长，用来处理真正业务的需求也就越少。
 - 创建线程需要较大的资源消耗。JVM 创建一个线程，即使不进行任何工作，也需要分配一个堆栈空间（128k）。
-- 如果程序中使用了大量的长连接，线程是不会关闭的，资源消耗更容易时空。
+- 如果程序中使用了大量的长连接，线程是不会关闭的，资源消耗更容易失控。
 
-为啥 `serverSocket. accept()`会出现阻塞？
+> 为啥 `serverSocket. accept()` 会出现阻塞？
 
-是因为 Java 通过 JNI 调用的系统层面的 `accept0()` 方法，`accept0()` 规定如果发现套件子从指定的端口来，就会等待。
+是因为 Java 通过 JNI 调用的系统层面的 `accept0()` 方法，`accept0()` 规定如果发现套间字从指定的端口来，就会等待。其实就是内部实现是操作系统级别的同步 IO。
 
 # 二、NIO（non-Blocking I/O）
 
+了解 NIO 之前我们先来看看标准 I/O（Standard I/O）。
+
+Standard I/O 是对字节的读写，在进行 I/O 之前，首先创建一个流对象，流对象的读写操作都是按字节，一个字节一个字节的读或者写。而 NIO 把 I/O 抽象成块，类似磁盘的读写，每次 I/O 操作的单位都是一个块，块被读入内存之后就是一个 ` byte[]`，NIO 一次可以读或者写多个字节。
+
+## 流和块
+
+IO 和 NIO 最重要的区别就是对数据的打包和传输的方式，IO 是以流的方式处理数据，而 NIO 以块的方式处理数据。
+
+面向流的 IO 一次性处理一个字节数据：一个输入流产生一个字节数据，一个输出流消费一个字节数据。为流式数据创建过滤器非常容易，链接几个过滤器，以便每个过滤器只负责复杂处理机制的一部分。不利的一面是，面向流的 IO 通常处理非常慢。
+
+面向块的 I/O 一次性处理一个数据块：按块处理数据比按流处理数据要快的多，但是面向块的 I/O 确实一些面向流的 I/O 所具有的优雅和简单。
+
+I/O 包和 NIO 已经很好的集成了，`java.io.*` 中已经以 NIO 重新实现了，可以利用一些 NIO 的特性。例如：在 `java.io.*` 中某些类包含以块的形式读写数据的操作，这使得及时在面向流的系统中，处理数据也会更快。
+
+## 基本概念
+
 Java NIO：同步非阻塞，服务器实现模式为一个线程处理多个请求（连接），即客户端发送的连接请求都会注册到多路复用器上，多路复用器轮训到连接有 I/O 请求就进行处理。
 
-## 1. 基本介绍
+**核心概念：**
 
-1. `三大核心：` Channel（通道）、Buffer（缓冲区）、Selector（选择器）。
-2. `面向缓冲区，或者是面向块编程。` 数据读取到一个它稍后处理的缓冲区，需要时可在缓冲区中前后移动，这就增加了处理过程中的林火星，使用它可以提供非阻塞式的高伸缩弹性网络。
-3. `非阻塞模式`, 使一个线程从某个通道发送请求或者读取数据，但是他仅能得到目前可用的数据，如果目前没有数据可用，就什么都不会获取，而不是保持线程阻塞。所以知道数据变得可读取之前，该线程还可以去做其他实行。
-4. `Channel 和 Buffer 一一对应`。
-5. `一个线程只有一个 Selector，一个线程对应对个 Channel（连接）`。
+1. **三大核心：** Channel（通道）、Buffer（缓冲区）、Selector（选择器）。
+2. **面向缓冲区，或者是面向块编程。** 数据读取到一个它稍后处理的缓冲区，需要时可在缓冲区中前后移动，这就增加了处理过程中的灵活性，使用它可以提供非阻塞式的高伸缩弹性网络。
+3. **非阻塞模式**， 使一个线程从某个通道发送请求或者读取数据，但是他仅能得到目前可用的数据，如果目前没有数据可用，就什么都不会获取，而不是保持线程阻塞。所以知道数据变得可读取之前，该线程还可以去做其他实行。
+4. **Channel 和 Buffer 一一对应。**
+5. **一个线程只有一个 Selector，一个线程对应对个 Channel（连接）**。
 6. 程序切换到哪个 Channel 是由事件决定，Event 就是个重要概念。
 7. Selector 会根据不同的事件，在各个通道上切换。
-8. `Buffer 是一个内存块，底层就是一个数组`。
-9. 数据读写都是通过 Buffer，区别于 BIO 的输入输出流，且`双向`，需要 `flip 方法切换 Channel 是双向的`。
+8. **Buffer 是一个内存块，底层就是一个数组**。
+9. 数据读写都是通过 Buffer，区别于 BIO 的输入输出流，且**双向**，需要 `flip` 方法切换 `Channel` 是双向的 。
 
-## 2. 编程原理
+## 编程原理
 
 1. 当客户端连接时，会通过 ServerSocketChannel 得到 SocketChannel。
-2. Selector 进行减轻 select 方法，返回有事件发生的通道个数。
-3. 将 SocketChannel 注册到 Selector 上（register(Selector selector, int ops)），一个 Selector 可以注册多个 SocketChannel。
+2. Selector 进行监听 select 方法，返回有事件发生的通道个数。
+3. 将 SocketChannel 注册到 Selector 上（`register(Selector selector, int ops)`），一个 Selector 可以注册多个 SocketChannel。
 4. 注册后返回 SelectionKey，会和该 Selector 关联（集合）。
 5. 当有事件发生时，进一步得到各个 SelectionKey。
 6. 通过channel () 方法，用 SelectionKey 反向获取 SocketChannel。
 7. 可以通过得到的 channel，完成业务处理。
 
-## 3. 缓冲区（Buffer）
+## 1. 缓冲区（Buffer）
 
-###  Buffer 类及其子类
+### Buffer 类及其子类
 
-BytBuffer,字节数据；ShortBuffer,字符串数据；CharBuffer,字符数据；IntBuffer,整数；
-
-LongBuffer,长整数；DoubleBuffer,小数；FloatBuffer,小数
+`ByteBuffer` 字节数据；`ShortBuffer` 字符串数据；`CharBuffer` 字符数据；`IntBuffer` 整数；`LongBuffer` 长整数；`DoubleBuffer` 小数；`FloatBuffer` 小数
 
 ### Buffer 属性和方法
 
-Buffer 类提供了 4 个属性来提供数据元素信息：
-
-`capacity（容量）`：缓存区的最大容量
-
-`Limit（终点）`：缓存区最大可操作位置
-
-`Position（位置）` ：缓存区当前在操作的位置
-
-`Mark（标记）`：标记位置
-
+Buffer 类提供了 4 个属性来提供数据元素信息：`capacity（容量）`：缓存区的最大容量，`Limit（终点）`：缓存区最大可操作位置，`Position（位置）` ：缓存区当前在操作的位置，`Mark（标记）`：标记位置
 
 ```java
 public abstract class Buffer{
@@ -211,45 +223,88 @@ public abstract class ByteBuffer(){
 
 ① 新建一个大小为 8 个字节的缓冲区，此时 position 为 0，而 limit = capacity = 8。capacity 变量不会改变，下面的讨论会忽略它。
 
-![[a8f0d4502adb087892e11866bdac7d57_MD5.png|1000]](img/a8f0d4502adb087892e11866bdac7d57_MD5.png)
+ ![[]](img/a8f0d4502adb087892e11866bdac7d57_MD5.png )
 
 ② 从输入通道中读取 5 个字节数据写入缓冲区中，此时 position 移动设置为 5，limit 保持不变。
 
-![[5ee1af7a6012fd34b62704d5b2867320_MD5.png|1000]](img/5ee1af7a6012fd34b62704d5b2867320_MD5.png)
+ ![[]](img/5ee1af7a6012fd34b62704d5b2867320_MD5.png )
 
 ③ 在将缓冲区的数据写到输出通道之前，需要先调用 flip() 方法，这个方法将 limit 设置为当前 position，并将 position 设置为 0。
 
-![[5cd2995739f1b0e1f4b355a2471c38aa_MD5.png|1025]](img/5cd2995739f1b0e1f4b355a2471c38aa_MD5.png)
+ ![[]](img/5cd2995739f1b0e1f4b355a2471c38aa_MD5.png )
 
 ④ 从缓冲区中取 4 个字节到输出缓冲中，此时 position 设为 4。
 
-![[0d87f8ba4e770fbdcd6c6fc61fb84862_MD5.png|1025]](img/0d87f8ba4e770fbdcd6c6fc61fb84862_MD5.png)
+ ![[]](img/0d87f8ba4e770fbdcd6c6fc61fb84862_MD5.png )
 
 ⑤ 最后需要调用 clear() 方法来清空缓冲区，此时 position 和 limit 都被设置为最初位置。
 
-![[f6ef08bdd8b4ff67a419bfe9b7dbc0f2_MD5.png|1025]](img/f6ef08bdd8b4ff67a419bfe9b7dbc0f2_MD5.png)
+ ![[]](img/f6ef08bdd8b4ff67a419bfe9b7dbc0f2_MD5.png )
 
-## 4. 通道（Channel）
+### 文件 NIO 实例
+
+以下展示了使用 NIO 快速复制文件的实例：
+
+```java
+public static void fastCopy(String src, String dist) throws IOException {
+
+    /* 获得源文件的输入字节流 */
+    FileInputStream fin = new FileInputStream(src);
+
+    /* 获取输入字节流的文件通道 */
+    FileChannel fcin = fin.getChannel();
+
+    /* 获取目标文件的输出字节流 */
+    FileOutputStream fout = new FileOutputStream(dist);
+
+    /* 获取输出字节流的通道 */
+    FileChannel fcout = fout.getChannel();
+
+    /* 为缓冲区分配 1024 个字节 */
+    ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+
+    while (true) {
+
+        /* 从输入通道中读取数据到缓冲区中 */
+        int r = fcin.read(buffer);
+
+        /* read() 返回 -1 表示 EOF */
+        if (r == -1) {
+            break;
+        }
+
+        /* 切换读写 */
+        buffer.flip();
+
+        /* 把缓冲区的内容写入输出文件中 */
+        fcout.write(buffer);
+        
+        /* 清空缓冲区 */
+        buffer.clear();
+    }
+}
+```
+
+
+## 2. 通道（Channel）
 
 通道类似流，但是有如下区别：
+
 - 通道可以同时读写，而流只能读或写
-- 以实现异步读写数据
-- 以从缓冲区读数据，也可以写数据到缓冲区
+- 通道可以实现异步读写数据
+- 通道可以从缓冲区读数据，也可以写数据到缓冲区
 
 ### 通道分类
 
-Channel 在 NIO 中是一个接口 `public interface Channle extends Closeable{}`
+Channel 在 NIO 中是一个接口 `public interface Channle extends Closeable{}`。其中，常用的 Channel 类有：
 
-常用的 Channel 类有： 
-- FileChannel：用于文件的数据读写
-- DatagramChannel：用于 UDP 的数据读写
-- ServerSocketChannel：可以监听新来的连接，对每一个新进来的连接都会创建一个 SocketChannel。只有通过这个通道，应用程序才能箱操作系统注册支持“多路复用 IO”的端口减轻。支持 TCP 和 UDP 协议
-- SocketChannel：TCP Socket 套接字的监听通道，用于 TCP 的数据读写
+1. `FileChannel`：用于文件的数据读写；
+2. `DatagramChannel`：用于 UDP 的数据读写；
+3. `ServerSocketChannel`：可以监听新来的连接，对每一个新进来的连接都会创建一个 SocketChannel。只有通过这个通道，应用程序才能箱操作系统注册支持“多路复用 IO”的端口减轻。支持 TCP 和 UDP 协议；
+4. `SocketChannel`：TCP Socket 套接字的监听通道，用于 TCP 的数据读写
+5. 其他的通道包括：
 
-其他的通道包括：
-
-![[94530647a3be7da4d2de055fff8bacaf_MD5.png|1025]](img/94530647a3be7da4d2de055fff8bacaf_MD5.png)
-
+ ![[]](img/94530647a3be7da4d2de055fff8bacaf_MD5.png )
 ### FileChannel 类
 
 对本地文件进行 IO 操作，常用方法及实例应用：
@@ -265,11 +320,11 @@ public long transferFrom(ReadableByteChannel src,long position,long count);
 public long transferTo(long position,long count,WritabelByteChannel target);
 
 ```
-#### 1 . 写入文件，使用之前 ByteBuffer 和 FileChannel 类
+
+1 . 写入文件，使用之前 `ByteBuffer` 和 `FileChannel` 类
 
 ``` java
 //使用之前ByteBuffer和FileChannel类，写入文件
-
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -287,7 +342,7 @@ public class NIOFileChannel{
 		ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
 		//将 str 放入到缓冲区
 		byteBuffer.put(str.getBytes());
-		//对 byteBuffer 记性 flip
+		//对 byteBuffer 进行 flip
 		byteBuffer.flip();
 
 		//将 byteBuffer 写入到 fileChannel
@@ -298,8 +353,7 @@ public class NIOFileChannel{
 }
 ```
 
-#### 2 . 读取文件数据并展示，使用之前 ByteBuffer 和 FileChannel 类
-
+2 . 读取文件数据并展示，使用之前 `ByteBuffer` 和 `FileChannel` 类
 
 ```java
 //读取本地文件
@@ -330,8 +384,8 @@ public class NIOFileChannel{
 
 ```
 
-#### 3 . 使用一个 Buffer 完成文件的读取、写入
 
+3 . 使用一个 `Buffer` 完成文件的读取、写入
 
 ```java
 import java.io.FileInputStream;
@@ -380,8 +434,7 @@ public class NIOFileChannel03 {
 }
 ```
 
-#### 4 . 拷贝文件transferFrom 方法
-
+4 . 拷贝文件transferFrom 方法
 
 ```java
 import java.io.FileInputStream;
@@ -413,8 +466,8 @@ public class NIOFileChannel04 {
 ```
 
 ###  Buffer 和 Channel 注意事项
-#### 1 . ByteBuffer 支持类型化的 put 和 get，put 放什么，get 取出什么，不然出现 BufferUnderflowException 异常
 
+**1. ByteBuffer 支持类型化的 put 和 get，put 放什么，get 取出什么，不然出现 BufferUnderflowException 异常**
 
 ```java
 import java.nio.ByteBuffer;
@@ -445,8 +498,7 @@ public class NIOByteBufferPutGet {
 }
 ```
 
-#### 2 .  普通 Buffer 转成只读 Buffer
-
+**2. 普通 Buffer 转成只读 Buffer**
 
 ```java
 
@@ -480,8 +532,7 @@ public class ReadOnlyBuffer {
 }
 ```
 
-#### 3 . NIO 中 MappedByteBuffer，可以让文件直接在堆外内存修改
-
+**3. NIO 中 MappedByteBuffer，可以让文件直接在堆外内存修改**
 
 ```java
 
@@ -519,8 +570,7 @@ public class MappedByteBufferTest {
 }
 ```
 
-#### 4. NIO 还支持通过多个 Buffer（即 Buffer数组）完成读写操作，即 Scattering 和 Gathering
-
+4. **NIO 还支持通过多个 Buffer（即 Buffer数组）完成读写操作，即 Scattering 和 Gathering**
 
 ```java
 import java.net.InetSocketAddress;
@@ -586,15 +636,22 @@ public class ScatteringAndGatheringTest {
 }
 ```
 
-## 5. Selector（选择器）
+## 3. Selector（选择器）
 
-![[0b37a3b751ec9aa08efa75ace30e23c4_MD5.png|1050]]
+### 基本概念
+
+NIO 常常被叫做非阻塞 IO，主要是因为 NIO 在网络通信中的非阻塞特性被广泛使用。NIO 实现了 IO 多路复用中的 Reator 模型，一个线程 Thread 使用一个选择器 Selector 通过轮询的方式去监听多个 Channel 上的事件，从而让一个线程能够处理多个事件。
+
+通过配置监听的通道 Channel 为非阻塞，那么当 Channel 上的 IO 事件还未到达时，就不会进入到阻塞状态一直等待，而是鸡血轮询其他 Channel，找到 IO 事件已经到达的 Channel 执行。
+
+以为创建和切换线程的开销很大，因此使用一个线程处理多个事件显然比一个线程处理一个事件具有更好的性能。
+
+ ![[]](img/0b37a3b751ec9aa08efa75ace30e23c4_MD5.png )
 
 1. Java 中的 NIO 可以用一个线程，处理多个客户端连接，就会使用到 Selector（选择器）
 2. 多个 Channel 以事件的方式注册到 Selector
 3. 只有在连接通道有真正的读写事件的时候，才会进行读写，减少系统开销
-4. 避免了多线程之间的上下文切换导致的开销
-
+4. 避免了`多线程之间的上下文切换导致的开销`
 
 ```java
 //Selector 类是一个抽象类，常用方法和说明如下：
@@ -604,15 +661,15 @@ public abstract class Selector implements Closeable{
 }
  ```
 
-以下是具体使用方法
+### 使用方法
 
-##### 1.创建选择器
-
+1. **创建选择器**
 
 ```java
 Selector selector = Selector.open();
 ```
-##### 2.将通道注册到选择器上
+
+2. **将通道注册到选择器上**
 
 ```java
 ServerSocketChannel ssChannel = ServerSocketChannel.open();
@@ -621,10 +678,8 @@ ssChannel.register(selector,SelectionKey.OP_ACCEPT);
 ```
 
 将通道注册到选择器上，还需要指定要注册的具体事件，主要有以下几类：
-- SelectionKey. OP_CONNECT
-- SelectionKey. OP_ACCEPT
-- SelectionKey. OP_READ
-- SelectionKey. OP_WRITE
+
+`SelectionKey. OP_CONNECT`、`SelectionKey. OP_ACCEPT`、`SelectionKey. OP_READ`、 `SelectionKey. OP_WRITE`
 
 他们在 SelectionKey 的定义如下：
 
@@ -634,7 +689,14 @@ public static final int OP_WRITE = 1 << 2;
 public static final int OP_CONNECT = 1 << 3;
 public static final int OP_ACCEPT = 1 << 4;
 ```
-##### 3. 监听事件
+
+可以看出每个事件都能当成一个位域，从而组成事件集整数。例如：
+
+```java
+int intersetSet = SelectionKey.OP_READ | SelectionKey.OP_WRITE;
+```
+
+3. **监听事件**
 
 ```java
 int num = selector.select();
@@ -642,7 +704,7 @@ int num = selector.select();
 
 使用 `select()` 方法来监听到达的事件，它会一直阻塞知道有至少一件事件到达。
 
-##### 4. 获取到达的事件
+4. **获取到达的事件**
 
 ```java
 Set<SelectionKey> keys = selector.selectedKeys();
@@ -657,7 +719,8 @@ while(keyIterator.hasNext()){
 	keyIterator.remove();
 }
 ```
-##### 5. 时间循环
+
+5. **时间循环**
 
 因为一次 select() 调动不能处理完所有的事件，并且服务器端有可能需要一直监听事件，因此服务器端处理时间的代码一般会放在一个死循环内。
 
@@ -678,7 +741,7 @@ while (true) {
 }
 ```
 
-套接字 NIO 实例
+### 套接字 NIO 实例
 
 ```java
 public class NIOServer {
@@ -731,7 +794,6 @@ public class NIOServer {
  	}
  }
 ```
-
 ```java
 public class NIOClient {
 	public static void main(String[] args) throws IOException{
@@ -743,7 +805,7 @@ public class NIOClient {
 	}
 }
 ```
-## 6. 典型的多路复用 IO 实现
+## 典型的多路复用 IO 实现
 
 目前流程的多路复用 IO 实现主要宝库了四种：select、poll、epoll、kqueue。以下是其特性及区别：
 
@@ -756,24 +818,26 @@ public class NIOClient {
 
 ### 1. Reactor事件驱动模型
 
-![[10d0080498aba2649f1c04067965b579_MD5.png|1025]]
+ ![[]](img/10d0080498aba2649f1c04067965b579_MD5.png )
 
 从图上可知：一个完整的 Reactor 事件驱动模型是有四个部分组成：客户端 Client，Reactor，Acceptor 和时间处理 Handler。其中 Acceptor 会不间断的接收客户端的连接请求，然后通过 Reactor 分发到不同 Handler 进行处理。改进后的 Reactor 有如下优点：
+
 - 虽然同是由一个线程接收连接请求进行网络读写，但是 Reactor 将客户端连接，网络读写，业务处理三大部分拆分，从而极大提高工作效率。
 - Reactor 是以事件驱动的，相比传统 IO 阻塞式的，不必等待，大大提升了效率。
 
 ### 2. Reactor 模型——业务处理和 IO 分离
 
 在上面的处理模型中，由于网络读写是在同一个线程里面。在高并发情况下，会出现两个瓶颈：
+
 - 高频率的读写事件处理
 - 大量的业务处理
 
 基于上述瓶颈，可以将业务处理和 IO 读写分离出来：
 
-![[37b1874d4aabb48cd6b511cba09fa70b_MD5.png|1025]](img/37b1874d4aabb48cd6b511cba09fa70b_MD5.png)
-
+ ![[]](img/37b1874d4aabb48cd6b511cba09fa70b_MD5.png )
 
 如图可以看出，相对基础 Reactor 模型，该模型有如下特点：
+
 - 使用一个线程进行客户端连接和网络读写
 - 客户端连接之后，将该连接交给线程池进行加解码以及业务处理
 
@@ -784,8 +848,7 @@ public class NIOClient {
 
 由于高并发的网络读写是系统一个瓶颈，所以针对这种情况，改进了模型，如图所示：
 
-![[870a39b7312d1d18324d3aefa613ab37_MD5.png|1025]](img/870a39b7312d1d18324d3aefa613ab37_MD5.png)
-
+ ![[]](img/870a39b7312d1d18324d3aefa613ab37_MD5.png )
 由图可以看出，在原有 Reactor 模型上，同时将 Reactor 拆分成 mainReactor 和 subReactor 。其中 mainReactor 主要负责客户端的请求连接，subReactor 通过一个线程池进行支撑，主要负责网络读写，因为线程池的原因，可以进行多线程并发读写，大大提升了网络读写的效率。业务处理也是通过线程池进行。通过这种方式，可以进行百万级别的连接。
 
 ### 4. Reactor 模型示例
@@ -832,9 +895,7 @@ public class Reactor implements Runnable{
 }
 
 ```
-
 这里Reactor首先开启了一个ServerSocketChannel，然后将其绑定到指定的端口，并且注册到了一个多路复用器上。接着在一个线程中，其会在多路复用器上等待客户端连接。当有客户端连接到达后，Reactor就会将其派发给一个Acceptor，由该Acceptor专门进行客户端连接的获取。下面我们继续看一下Acceptor的代码：
-
 ```java
 public class Acceptor implements Runnable{
 	private final ExecuteorService executor = Exxcutors.newFixedThreadPool(20);
@@ -931,29 +992,32 @@ public class Handler implements Runnable{
 
 在 Handler 中，主要进行的就是每个客户端 Channel 创建一个 Selector，并且监听该 Channel 的网络读写事件。当有事件到达时，进行数据的读写，而业务操作交友具体的业务线程池处理。
 
-# 三、AIO（ Asynchronous I/O）
+# 三、AIO（ Asynchronous I/O）
 
 1. JDK7 引入了 Asynchronous I/O，即 AIO。在进行 I/O 编程中，常用到两种模式：Reactor 和 Proactor。Java 的 NIO 就是 Reactor，当有事件触发时，服务器端得到通知，进行相应的处理
 2. AIO 即 NIO2.0，叫做异步不阻塞的 IO。AIO 引入异步通道的概念，采用了 Proactor 模式，简化了程序编写，有效的请求才启动线程，它的特点是先由操作系统完成后才通知服务端程序启动线程去处理，一般适用于连接数较多且连接时间较长的应用
 
-### 1. 异步 IO
+### 异步 IO
 
-之前主要介绍了阻塞式同步 IO，非阻塞式同步 IO，多路复用 IO 这三种 IO 模型。而异步 IO 是采用“订阅-通知”模式，即应用程序想操作系统注册 IO 监听，然后继续做自己的实行。当操作系统发生 IO 时间，并且准备好数据后，主动通知应用程序，触发相应的函数：
+之前主要介绍了阻塞式同步 IO，非阻塞式同步 IO，多路复用 IO 这三种 IO 模型。而异步 IO 是采用“订阅-通知”模式，即应用程序向操作系统注册 IO 监听，然后继续做自己的事情。当操作系统发生 IO 事件，并且准备好数据后，主动通知应用程序，触发相应的函数：
 
-![[3a01157436842562f7f21f8b4c4549d4_MD5.png|1025]](img/3a01157436842562f7f21f8b4c4549d4_MD5.png)
+ ![[]](img/3a01157436842562f7f21f8b4c4549d4_MD5.png )
 
 和同步 IO 一样，异步 IO 也是由操作系统进行支持的。Windows 系统提供了一种异步 IO 技术：IOCP（I/O Completion Port，I/O 完成端口）；
 Linux 下由于没有这种异步 IO 技术，所以使用的是 epoll（上文介绍过的一种多路复用 IO 技术的实现）对异步 IO 进行模拟。
 
-### 2. Java AIO 框架解析
+### Java AIO 框架解析
 
-![[2ff37cd0e1f5f734f8d6209396a08897_MD5.png|1025]](img/2ff37cd0e1f5f734f8d6209396a08897_MD5.png)
+ ![[]](img/2ff37cd0e1f5f734f8d6209396a08897_MD5.png )
 
 以上结构主要是说明 JAVA AIO 中类设计和操作系统的相关性。
 
-
-
+> 上述所有代码仓库地址：https://github.com/z1gui/netty_io
 
 参考资料：
+
 > [BIO、NIO、AIO区别详解](https://zhuanlan.zhihu.com/p/520809188?utm_id=0)
+>
+> [♥Java IO知识体系详解♥](https://pdai.tech/md/java/io/java-io-overview.html)
+
 
